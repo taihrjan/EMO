@@ -431,6 +431,14 @@ with tab2:
 
     ci1, ci2 = st.columns([1, 1], gap="large")
 
+    # Соотношение сторон → CSS размеры для превью
+    ASPECT_CSS = {
+        "16:9": ("100%", "56.25%"),   # width, padding-bottom
+        "9:16": ("56.25%", "100%"),
+        "1:1":  ("100%", "100%"),
+        "4:3":  ("100%", "75%"),
+    }
+
     with ci1:
         ref2 = st.file_uploader("📎 Загрузить фото", type=["jpg","jpeg","png","webp"], key="ref2")
         if ref2:
@@ -438,7 +446,6 @@ with tab2:
 
         ip = st.text_area("", placeholder="Опиши изображение...\n\n3D Pixar style, cinematic scene of...", height=120, label_visibility="collapsed", key="ip2")
 
-        # Быстрые стили — карточки
         st.markdown('<div style="color:#555;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin:0.8rem 0 0.5rem">Быстрые стили</div>', unsafe_allow_html=True)
         STYLES = {
             "🎭 Pixar 3D":    "3D Pixar animation style, vibrant colors, cinematic lighting, 8k",
@@ -457,13 +464,18 @@ with tab2:
             st.markdown(f'<div style="background:#141414;border:1px solid #C8FF00;border-radius:8px;padding:0.5rem 0.8rem;font-size:0.75rem;color:#C8FF00;margin-top:0.5rem">+ {sty}</div>', unsafe_allow_html=True)
 
         n_img = st.select_slider("Количество", [1,2,3,4], value=1)
-        go = st.button("🎨  ГЕНЕРИРОВАТЬ", type="primary", use_container_width=True)
+        gcols_btn = st.columns([3,1])
+        with gcols_btn[0]:
+            go = st.button("🎨  ГЕНЕРИРОВАТЬ", type="primary", use_container_width=True)
+        with gcols_btn[1]:
+            if st.button("🗑", use_container_width=True, help="Сбросить результат"):
+                st.session_state.pop("gen_images", None)
 
     with ci2:
         st.markdown('<div style="color:#555;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.8rem">Результат</div>', unsafe_allow_html=True)
-        result_area = st.empty()
 
         if go and full_p:
+            st.session_state.pop("gen_images", None)
             from utils.google_image import generate_image
             os.makedirs("generated_output/images", exist_ok=True)
             prog = st.progress(0)
@@ -477,13 +489,22 @@ with tab2:
                 if p and os.path.exists(p):
                     generated.append(p)
             prog.empty()
-            if generated:
-                for i, p in enumerate(generated):
-                    st.image(p, use_container_width=True)
-                    with open(p,"rb") as f:
-                        st.download_button(f"📥 Скачать {i+1}", f.read(), os.path.basename(p), key=f"mi{i}")
+            st.session_state["gen_images"] = generated
         elif go:
             st.warning("Введи промт")
+
+        # Вычисляем CSS для текущего aspect ratio
+        ar = aspect  # берём из sidebar
+        max_w = "320px" if ar == "9:16" else "100%"
+        img_style = f"max-width:{max_w};border-radius:10px;display:block;margin:0 auto"
+
+        gen_imgs = st.session_state.get("gen_images", [])
+        if gen_imgs:
+            for i, p in enumerate(gen_imgs):
+                if os.path.exists(p):
+                    st.image(p, use_container_width=(ar != "9:16"), width=300 if ar == "9:16" else None)
+                    with open(p,"rb") as f:
+                        st.download_button(f"📥 Скачать {i+1}", f.read(), os.path.basename(p), key=f"mi{i}", use_container_width=True)
         else:
             st.markdown("""
 <div style="border:2px dashed #222;border-radius:14px;padding:4rem 2rem;text-align:center;color:#333;font-size:0.85rem">
