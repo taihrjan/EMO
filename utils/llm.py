@@ -19,24 +19,30 @@ def call_llm(prompt: str, system_prompt: str = "", provider: Optional[str] = Non
     """
     provider = provider or os.getenv("LLM_PROVIDER", "groq").lower()
 
-    # Пробуем основной провайдер, при ошибке — Gemini как запасной
-    try:
-        if provider == "groq":
-            return _call_groq(prompt, system_prompt, json_mode)
-        elif provider == "gemini":
-            return _call_gemini(prompt, system_prompt, json_mode)
-        elif provider == "openai":
-            return _call_openai(prompt, system_prompt, json_mode)
-        else:
-            raise ValueError(f"Неизвестный провайдер: {provider}")
-    except Exception as e:
-        print(f"⚠️  {provider} ошибка: {e}")
-        # Автоматический fallback на Gemini если не сработал Groq
-        if provider != "gemini" and os.getenv("GEMINI_API_KEY"):
-            print("   🔄 Переключаюсь на Gemini...")
-            return _call_gemini(prompt, system_prompt, json_mode)
-        # Если и Gemini нет — поднимаем ошибку чтобы UI показал её
-        raise RuntimeError(f"LLM недоступен ({provider}): {e}\n\nПроверь API ключи в .env файле:\nGROQ_API_KEY=gsk_...\nGEMINI_API_KEY=AIzaSy...")
+    # Порядок попыток: основной → запасной
+    order = []
+    if provider == "groq":
+        order = ["groq", "gemini"]
+    elif provider == "gemini":
+        order = ["gemini", "groq"]
+    else:
+        order = [provider]
+
+    last_err = None
+    for p in order:
+        try:
+            if p == "groq" and os.getenv("GROQ_API_KEY"):
+                print(f"   🤖 Groq...")
+                return _call_groq(prompt, system_prompt, json_mode)
+            elif p == "gemini" and os.getenv("GEMINI_API_KEY"):
+                print(f"   🤖 Gemini...")
+                return _call_gemini(prompt, system_prompt, json_mode)
+        except Exception as e:
+            print(f"   ⚠️  {p} ошибка: {str(e)[:120]}")
+            last_err = e
+            continue
+
+    raise RuntimeError(f"Все LLM недоступны. Последняя ошибка: {last_err}\n\nПроверь .env:\nGROQ_API_KEY=gsk_...\nGEMINI_API_KEY=AIzaSy...")
 
 
 def _call_groq(prompt: str, system_prompt: str = "", json_mode: bool = False) -> str:
