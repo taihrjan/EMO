@@ -24,8 +24,13 @@ st.markdown("""
 
 [data-testid="stAppViewContainer"] { background: #0a0a0a; }
 [data-testid="stSidebar"] { background: #111111; border-right: 1px solid #222; }
-[data-testid="stHeader"] { background: transparent; }
+[data-testid="stHeader"] { background: transparent; display: none; }
+[data-testid="collapsedControl"] { display: none; }
 .block-container { padding: 0 2rem 3rem; max-width: 100%; }
+
+/* скрыть дублирующиеся элементы */
+[data-testid="stFileUploaderDropzoneInput"] + div { display: none; }
+section[data-testid="stFileUploaderDropzone"] > div > div:nth-child(2) { display: none; }
 
 /* ── TOP NAV ── */
 .hg-nav {
@@ -230,9 +235,6 @@ gem_ok  = bool(os.getenv("GEMINI_API_KEY"))
 st.markdown(f"""
 <div class="hg-nav">
   <span class="hg-logo">AI STUDIO</span>
-  <span class="hg-navlink active">Контент</span>
-  <span class="hg-navlink">Изображения</span>
-  <span class="hg-navlink">История</span>
   <div style="flex:1"></div>
   <span style="font-size:0.75rem;color:#555">
     <span class="dot {'dot-g' if groq_ok else 'dot-r'}"></span>Groq&nbsp;&nbsp;
