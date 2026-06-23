@@ -204,9 +204,22 @@ div[data-testid="stButton"] > button[kind="primary"]:hover {
 }
 .hg-tag:hover { border-color:#C8FF00; color:#C8FF00; }
 
-label, .stMarkdown p { color: #888 !important; }
+label { color: #888 !important; }
 h1,h2,h3,h4 { color: #fff !important; }
-[data-testid="stExpander"] { background: #141414; border: 1px solid #222; border-radius: 10px; }
+p { color: #ccc; }
+[data-testid="stExpander"] { background: #141414 !important; border: 1px solid #222 !important; border-radius: 10px !important; }
+[data-testid="stExpander"] summary { color: #ccc !important; }
+[data-testid="stMarkdownContainer"] p { color: #ccc; }
+[data-testid="stCheckbox"] label { color: #ccc !important; }
+[data-testid="stRadio"] label { color: #ccc !important; }
+[data-testid="stSelectbox"] label { color: #888 !important; }
+[data-testid="stFileUploader"] label { color: #888 !important; }
+[data-testid="stFileUploader"] { background: #141414 !important; border: 2px dashed #2a2a2a !important; border-radius: 12px !important; }
+.stSpinner > div { border-top-color: #C8FF00 !important; }
+[data-testid="stProgress"] > div > div { background: #C8FF00 !important; }
+code { background: #1e1e1e !important; color: #C8FF00 !important; border-radius: 6px !important; }
+[data-testid="stCodeBlock"] { background: #141414 !important; border: 1px solid #2a2a2a !important; border-radius: 10px !important; }
+[data-testid="stCodeBlock"] code { color: #e0e0e0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
