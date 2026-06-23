@@ -28,9 +28,6 @@ st.markdown("""
 [data-testid="collapsedControl"] { display: none; }
 .block-container { padding: 0 2rem 3rem; max-width: 100%; }
 
-/* скрыть дублирующиеся элементы */
-[data-testid="stFileUploaderDropzoneInput"] + div { display: none; }
-section[data-testid="stFileUploaderDropzone"] > div > div:nth-child(2) { display: none; }
 
 /* ── TOP NAV ── */
 .hg-nav {
@@ -179,12 +176,32 @@ div[data-testid="stButton"] > button[kind="primary"]:hover {
     color: #e5e5e5 !important;
 }
 
-/* ── FILE UPLOADER ── */
+/* ── FILE UPLOADER — button only, no drag zone ── */
 [data-testid="stFileUploader"] {
-    background: #141414;
-    border: 2px dashed #2a2a2a;
-    border-radius: 12px;
-    padding: 1rem;
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+}
+[data-testid="stFileUploaderDropzone"] {
+    background: #141414 !important;
+    border: 1px solid #2a2a2a !important;
+    border-radius: 10px !important;
+    padding: 0.5rem !important;
+    min-height: unset !important;
+}
+/* hide drag-drop instructional text, keep only button */
+[data-testid="stFileUploaderDropzone"] > div > span,
+[data-testid="stFileUploaderDropzone"] > div > small {
+    display: none !important;
+}
+[data-testid="stFileUploaderDropzone"] > div > button {
+    width: 100% !important;
+    background: #1a1a1a !important;
+    color: #C8FF00 !important;
+    border: 1px solid #C8FF00 !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    padding: 0.5rem 1rem !important;
 }
 
 /* ── GALLERY GRID ── */
@@ -219,7 +236,6 @@ p { color: #ccc; }
 [data-testid="stRadio"] label { color: #ccc !important; }
 [data-testid="stSelectbox"] label { color: #888 !important; }
 [data-testid="stFileUploader"] label { color: #888 !important; }
-[data-testid="stFileUploader"] { background: #141414 !important; border: 2px dashed #2a2a2a !important; border-radius: 12px !important; }
 .stSpinner > div { border-top-color: #C8FF00 !important; }
 [data-testid="stProgress"] > div > div { background: #C8FF00 !important; }
 code { background: #1e1e1e !important; color: #C8FF00 !important; border-radius: 6px !important; }
@@ -286,15 +302,10 @@ with tab1:
 
     with cr:
         st.markdown('<div style="color:#555;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.5rem">Фото-референс</div>', unsafe_allow_html=True)
-        ref_file = st.file_uploader("", type=["jpg","jpeg","png","webp"], label_visibility="collapsed")
+        ref_file = st.file_uploader("📎 Загрузить референс", type=["jpg","jpeg","png","webp"])
         if ref_file:
             st.image(Image.open(ref_file), use_container_width=True)
             st.markdown('<div style="color:#C8FF00;font-size:0.75rem;margin-top:0.3rem">✓ Добавится к промтам</div>', unsafe_allow_html=True)
-        else:
-            st.markdown("""
-<div style="border:2px dashed #2a2a2a;border-radius:12px;padding:2rem;text-align:center;color:#444;font-size:0.8rem">
-  📎 Перетащи фото<br>сюда
-</div>""", unsafe_allow_html=True)
 
     if run_btn:
         from main import run_pipeline
@@ -421,7 +432,7 @@ with tab2:
     ci1, ci2 = st.columns([1, 1], gap="large")
 
     with ci1:
-        ref2 = st.file_uploader("📎 Референсное фото", type=["jpg","jpeg","png","webp"], key="ref2")
+        ref2 = st.file_uploader("📎 Загрузить фото", type=["jpg","jpeg","png","webp"], key="ref2")
         if ref2:
             st.image(Image.open(ref2), use_container_width=True)
 
