@@ -53,7 +53,7 @@ def _call_groq(prompt: str, system_prompt: str = "", json_mode: bool = False) ->
     if not api_key:
         raise ValueError("GROQ_API_KEY не найден в .env")
 
-    model = os.getenv("GROQ_MODEL", "llama3-70b-8192")
+    model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     messages = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
