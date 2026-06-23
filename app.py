@@ -565,8 +565,14 @@ with tab3:
 # TAB 4 — CHAT
 # ══════════════════════════════════════════════════════════════════════════════
 with tab4:
-    st.markdown('<div style="font-size:1.8rem;font-weight:900;color:#fff;margin-bottom:0.3rem">Чат с AI</div>', unsafe_allow_html=True)
-    st.markdown('<div style="color:#555;font-size:0.9rem;margin-bottom:1.5rem">Groq · llama3-70b · Помощник по контенту</div>', unsafe_allow_html=True)
+    # Выбор провайдера чата
+    chat_prov_cols = st.columns([3,1])
+    with chat_prov_cols[0]:
+        st.markdown('<div style="font-size:1.8rem;font-weight:900;color:#fff;margin-bottom:0.3rem">Чат с AI</div>', unsafe_allow_html=True)
+    with chat_prov_cols[1]:
+        chat_provider = st.selectbox("", ["gemini","groq"], label_visibility="collapsed", key="chat_prov")
+    model_label = "Gemini 1.5 Flash" if chat_provider == "gemini" else "Llama3-70b"
+    st.markdown(f'<div style="color:#555;font-size:0.9rem;margin-bottom:1.5rem">{model_label} · Помощник по контенту</div>', unsafe_allow_html=True)
 
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
@@ -616,38 +622,52 @@ with tab4:
         st.session_state["_last_chat"] = user_input
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
 
-        # Запрос к Groq
-        api_key = os.getenv("GROQ_API_KEY")
-        if not api_key:
-            reply = "⚠️ GROQ_API_KEY не найден. Добавь ключ в настройках (боковая панель)."
-        else:
-            try:
-                import requests as req
-                headers = {
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                }
-                messages_payload = [
-                    {"role": "system", "content": "Ты профессиональный AI-ассистент для создания вирусного контента для TikTok, YouTube Shorts и Instagram Reels. Отвечай на русском, кратко и по делу. Помогаешь с идеями, сценариями, промтами для изображений, хэштегами."}
-                ] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.chat_messages]
+        # Запрос к AI
+        import requests as req
+        chat_prov = st.session_state.get("chat_prov", "gemini")
+        sys_prompt = "Ты профессиональный AI-ассистент для создания вирусного контента для TikTok, YouTube Shorts и Instagram Reels. Отвечай на русском языке, кратко и по делу. Помогаешь с идеями, сценариями, промтами для изображений, хэштегами."
 
-                payload = {
-                    "model": os.getenv("GROQ_MODEL", "llama3-70b-8192"),
-                    "messages": messages_payload,
-                    "max_tokens": 1024,
-                    "temperature": 0.8,
-                }
-                with st.spinner("AI думает..."):
+        try:
+            with st.spinner("AI думает..."):
+                if chat_prov == "gemini":
+                    api_key = os.getenv("GEMINI_API_KEY")
+                    if not api_key:
+                        raise ValueError("GEMINI_API_KEY не найден")
+                    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+                    # Собираем историю в формат Gemini
+                    contents = []
+                    for m in st.session_state.chat_messages:
+                        role = "user" if m["role"] == "user" else "model"
+                        contents.append({"role": role, "parts": [{"text": m["content"]}]})
+                    payload = {
+                        "system_instruction": {"parts": [{"text": sys_prompt}]},
+                        "contents": contents,
+                        "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.8}
+                    }
+                    resp = req.post(url, json=payload, params={"key": api_key}, timeout=30)
+                    if resp.status_code == 200:
+                        reply = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                    else:
+                        raise ValueError(f"Gemini {resp.status_code}: {resp.text[:200]}")
+                else:
+                    api_key = os.getenv("GROQ_API_KEY")
+                    if not api_key:
+                        raise ValueError("GROQ_API_KEY не найден")
+                    messages_payload = [{"role": "system", "content": sys_prompt}] + \
+                        [{"role": m["role"], "content": m["content"]} for m in st.session_state.chat_messages]
                     resp = req.post(
                         "https://api.groq.com/openai/v1/chat/completions",
-                        json=payload, headers=headers, timeout=30
+                        json={"model": os.getenv("GROQ_MODEL","llama3-70b-8192"), "messages": messages_payload, "max_tokens": 1024, "temperature": 0.8},
+                        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                        timeout=30
                     )
-                if resp.status_code == 200:
-                    reply = resp.json()["choices"][0]["message"]["content"]
-                else:
-                    reply = f"⚠️ Ошибка Groq {resp.status_code}: {resp.text[:200]}"
-            except Exception as e:
-                reply = f"⚠️ Ошибка: {e}"
+                    if resp.status_code == 200:
+                        reply = resp.json()["choices"][0]["message"]["content"]
+                    else:
+                        raise ValueError(f"Groq {resp.status_code}: {resp.text[:200]}")
+        except Exception as e:
+            reply = f"⚠️ Ошибка: {e}"
 
         st.session_state.chat_messages.append({"role": "assistant", "content": reply})
         st.rerun()

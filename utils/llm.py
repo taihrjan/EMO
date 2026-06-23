@@ -37,57 +37,49 @@ def call_llm(prompt: str, system_prompt: str = "", provider: Optional[str] = Non
 
 
 def _call_groq(prompt: str, system_prompt: str = "", json_mode: bool = False) -> str:
-    """Вызов Groq API через OpenAI-совместимый интерфейс."""
-    try:
-        from openai import OpenAI
-    except ImportError:
-        raise ImportError("Установите: pip install openai")
+    """Вызов Groq API через requests."""
+    import requests
 
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise ValueError("GROQ_API_KEY не найден в .env")
 
-    client = OpenAI(
-        api_key=api_key,
-        base_url="https://api.groq.com/openai/v1",
-    )
-
     model = os.getenv("GROQ_MODEL", "llama3-70b-8192")
     messages = []
-
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": prompt})
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=0.7,
-        max_tokens=4096,
+    resp = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        json={"model": model, "messages": messages, "max_tokens": 4096, "temperature": 0.7},
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        timeout=30,
     )
-
-    return response.choices[0].message.content
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
 
 
 def _call_gemini(prompt: str, system_prompt: str = "", json_mode: bool = False) -> str:
-    """Вызов Google Gemini API."""
-    try:
-        import google.generativeai as genai
-    except ImportError:
-        raise ImportError("Установите: pip install google-generativeai")
+    """Вызов Google Gemini API через requests (без SDK)."""
+    import requests
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GEMINI_API_KEY не найден в .env")
 
-    genai.configure(api_key=api_key)
-    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
-    model = genai.GenerativeModel(model_name)
+    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
 
-    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-    response = model.generate_content(full_prompt)
+    parts = []
+    if system_prompt:
+        parts.append({"text": system_prompt + "\n\n"})
+    parts.append({"text": prompt})
 
-    return response.text
+    payload = {"contents": [{"parts": parts}]}
+    resp = requests.post(url, json=payload, params={"key": api_key}, timeout=30)
+    resp.raise_for_status()
+    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def _call_openai(prompt: str, system_prompt: str = "", json_mode: bool = False) -> str:
