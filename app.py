@@ -682,131 +682,150 @@ with tab4:
 # TAB 5 — BATCH GENERATION
 # ══════════════════════════════════════════════════════════════════════════════
 with tab5:
-    st.markdown('<div style="font-size:1.8rem;font-weight:900;color:#fff;margin-bottom:0.3rem">Пакетная генерация</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size:1.8rem;font-weight:900;color:#fff;margin-bottom:0.3rem">Сторибоард · Пакетная генерация</div>', unsafe_allow_html=True)
     st.markdown('<div style="color:#555;font-size:0.9rem;margin-bottom:1.5rem">Imagen 4 · Veo 3 · Все сцены за один запуск</div>', unsafe_allow_html=True)
 
-    from utils.batch import estimate_batch_cost
+    from utils.batch import estimate_batch_cost, estimate_video_cost
 
-    # ── Настройки пакета ──
-    bp1, bp2, bp3, bp4 = st.columns(4)
-    with bp1:
-        batch_mode = st.radio("Что генерировать", ["🖼️ Только фото", "🎥 Только видео", "🖼️+🎥 Всё"], horizontal=False)
-    with bp2:
-        batch_aspect = st.radio("Формат фото", ["16:9","9:16","1:1","4:3"])
-    with bp3:
-        batch_dur = st.select_slider("Длительность видео", [5, 8], value=5)
-        batch_res = st.radio("Разрешение", ["720p","1080p"])
-    with bp4:
-        batch_source = st.radio("Источник промтов", ["Последняя генерация", "Ввести вручную"])
+    # ── Загрузка данных ──
+    rdir = "generated_output"
+    os.makedirs(rdir, exist_ok=True)
+    result_files = sorted([f for f in os.listdir(rdir) if f.startswith("result_") and f.endswith(".json")], reverse=True)
 
-    st.divider()
-
-    # ── Промты ──
-    batch_prompts = []
-
-    if batch_source == "Последняя генерация":
-        rdir = "generated_output"
-        files = sorted([f for f in os.listdir(rdir) if f.startswith("result_") and f.endswith(".json")], reverse=True) if os.path.exists(rdir) else []
-        if files:
-            with open(os.path.join(rdir, files[0]), encoding="utf-8") as f:
-                last = json.load(f)
-            key = "video_prompts" if "Видео" in batch_mode else "photo_prompts"
-            raw = last.get(key, last.get("photo_prompts", []))
-            batch_prompts = [{"scene_number": p["scene_number"], "prompt": p["prompt"]} for p in raw]
-            st.markdown(f'<div style="color:#C8FF00;font-size:0.8rem;margin-bottom:0.5rem">✓ Загружено {len(batch_prompts)} промтов из: {files[0]}</div>', unsafe_allow_html=True)
-            for p in batch_prompts:
-                st.markdown(f'<div style="background:#141414;border:1px solid #222;border-radius:8px;padding:0.5rem 0.8rem;margin:3px 0;font-size:0.78rem;color:#888"><b style="color:#C8FF00">#{p["scene_number"]}</b> {p["prompt"][:120]}...</div>', unsafe_allow_html=True)
-        else:
-            st.warning("Нет сохранённых генераций. Сначала запусти Генератор.")
+    if not result_files:
+        st.markdown('<div style="border:2px dashed #1a1a1a;border-radius:14px;padding:4rem;text-align:center;color:#555">Нет данных — сначала запусти <b style="color:#C8FF00">Генератор</b></div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div style="color:#888;font-size:0.8rem;margin-bottom:0.4rem">Введи промты (каждый с новой строки, нумерация автоматическая)</div>', unsafe_allow_html=True)
-        manual_text = st.text_area("", height=200, label_visibility="collapsed",
-                                   placeholder="3D Pixar style, hero stands on mountain top, cinematic\n3D Pixar style, city lights at night, aerial view\n...")
-        if manual_text.strip():
-            batch_prompts = [{"scene_number": i+1, "prompt": p.strip()}
-                             for i, p in enumerate(manual_text.strip().split("\n")) if p.strip()]
+        # Выбор генерации
+        sel_file = st.selectbox("", result_files,
+                                format_func=lambda x: x.replace("result_","").replace(".json",""),
+                                label_visibility="collapsed", key="batch_sel")
+        with open(os.path.join(rdir, sel_file), encoding="utf-8") as f:
+            bdata = json.load(f)
 
-    # ── Стоимость ──
-    if batch_prompts:
-        n = len(batch_prompts)
-        do_img = "фото" in batch_mode or "Всё" in batch_mode
-        do_vid = "видео" in batch_mode or "Всё" in batch_mode
-        cost = estimate_batch_cost(n if do_img else 0, batch_dur, batch_res)
-        vid_cost = estimate_batch_cost(n if do_vid else 0, batch_dur, batch_res)
+        photo_prompts_raw = bdata.get("photo_prompts", [])
+        video_prompts_raw = bdata.get("video_prompts", [])
+        scenes_raw        = bdata.get("scenes", [])
 
-        cm1, cm2, cm3, cm4 = st.columns(4)
-        cm1.markdown(f'<div class="hg-metric"><div class="hg-metric-val">{n}</div><div class="hg-metric-lbl">Сцен</div></div>', unsafe_allow_html=True)
-        if do_img:
-            cm2.markdown(f'<div class="hg-metric"><div class="hg-metric-val" style="color:#4a9">${n*0.04:.2f}</div><div class="hg-metric-lbl">Imagen (фото)</div></div>', unsafe_allow_html=True)
-        if do_vid:
-            cm3.markdown(f'<div class="hg-metric"><div class="hg-metric-val" style="color:#f80">${n * estimate_batch_cost(1, batch_dur, batch_res)["total"]:.2f}</div><div class="hg-metric-lbl">Veo (видео)</div></div>', unsafe_allow_html=True)
-        total = (n*0.04 if do_img else 0) + (n * estimate_batch_cost(1, batch_dur, batch_res)["total"] if do_vid else 0)
-        cm4.markdown(f'<div class="hg-metric"><div class="hg-metric-val" style="color:#C8FF00">${total:.2f}</div><div class="hg-metric-lbl">Итого</div></div>', unsafe_allow_html=True)
+        # Индексы для быстрого поиска
+        vid_prompt_map = {p["scene_number"]: p["prompt"] for p in video_prompts_raw}
+        scene_map      = {s["scene_number"]: s for s in scenes_raw}
 
-        st.markdown("<br>", unsafe_allow_html=True)
+        # ── Настройки ──
+        cfg1, cfg2, cfg3, cfg4 = st.columns(4)
+        with cfg1:
+            batch_aspect = st.radio("Формат", ["16:9","9:16","1:1","4:3"], horizontal=True, key="ba")
+        with cfg2:
+            batch_dur = st.select_slider("Длительность", [5, 8], value=5, key="bd")
+        with cfg3:
+            batch_res = st.radio("Разрешение", ["720p","1080p"], horizontal=True, key="br")
+        with cfg4:
+            n = len(photo_prompts_raw)
+            img_cost = n * 0.04
+            vid_cost_total = n * estimate_video_cost(batch_dur, batch_res)
+            st.markdown(f'<div class="hg-metric" style="margin-top:0"><div class="hg-metric-val" style="font-size:1.2rem;color:#C8FF00">${img_cost:.2f} + ${vid_cost_total:.2f}</div><div class="hg-metric-lbl">фото + видео ({n} сцен)</div></div>', unsafe_allow_html=True)
 
-        start_btn = st.button("⚡  ЗАПУСТИТЬ ПАКЕТ", type="primary", use_container_width=True)
+        st.divider()
 
-        if start_btn:
+        # ════════════════════════════════════════════════════
+        # СТОРИБОАРД — сетка сцен
+        # ════════════════════════════════════════════════════
+        st.markdown('<div style="color:#C8FF00;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1rem">Сторибоард</div>', unsafe_allow_html=True)
+
+        COLS = 3
+        sb_cols = st.columns(COLS)
+
+        for idx, pp in enumerate(photo_prompts_raw):
+            n_scene = pp["scene_number"]
+            img_path = f"generated_output/images/scene_{n_scene:02d}.png"
+            vid_path = f"generated_output/videos/scene_{n_scene:02d}.mp4"
+            scene_info = scene_map.get(n_scene, {})
+            vid_prompt  = vid_prompt_map.get(n_scene, pp["prompt"])
+
+            with sb_cols[idx % COLS]:
+                # Номер сцены + длительность
+                _dur = scene_info.get("duration_seconds", "?")
+                _mood = scene_info.get("mood", "")
+                st.markdown(f'<div style="color:#C8FF00;font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.3rem">СЦЕНА {n_scene} · {_dur} сек · {_mood}</div>', unsafe_allow_html=True)
+
+                # Фото (если есть — показать, иначе заглушка)
+                if os.path.exists(img_path):
+                    st.image(img_path, use_container_width=True)
+                    with open(img_path, "rb") as fh:
+                        st.download_button("📥 фото", fh.read(), f"scene_{n_scene:02d}.png", key=f"sb_dl_img_{n_scene}")
+                else:
+                    st.markdown(f'''
+<div style="background:#0f0f0f;border:2px dashed #2a2a2a;border-radius:10px;
+            aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;
+            color:#333;font-size:0.75rem;text-align:center;padding:1rem">
+  🖼️ Сцена {n_scene}<br>фото не сгенерировано
+</div>''', unsafe_allow_html=True)
+
+                # Видео (если есть)
+                if os.path.exists(vid_path):
+                    st.video(vid_path)
+                    with open(vid_path, "rb") as fh:
+                        st.download_button("📥 видео", fh.read(), f"scene_{n_scene:02d}.mp4", key=f"sb_dl_vid_{n_scene}")
+
+                # Описание сцены
+                if scene_info.get("narration"):
+                    st.markdown(f'<div style="color:#666;font-size:0.72rem;font-style:italic;margin:0.4rem 0 0.2rem;line-height:1.4">🎙 {scene_info["narration"][:100]}...</div>', unsafe_allow_html=True)
+
+                # Видео промт
+                st.markdown(f'<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;padding:0.5rem 0.7rem;font-size:0.7rem;color:#555;line-height:1.5;margin-bottom:1rem">{vid_prompt[:180]}{"..." if len(vid_prompt)>180 else ""}</div>', unsafe_allow_html=True)
+
+        st.divider()
+
+        # ── Кнопки запуска ──
+        btn_c1, btn_c2, btn_c3 = st.columns(3)
+        with btn_c1:
+            run_img_btn = st.button("🖼️  ГЕНЕРИРОВАТЬ ФОТО", type="primary", use_container_width=True)
+        with btn_c2:
+            run_vid_btn = st.button("🎥  ГЕНЕРИРОВАТЬ ВИДЕО", type="primary", use_container_width=True)
+        with btn_c3:
+            run_all_btn = st.button("⚡  ВСЁ СРАЗУ", type="primary", use_container_width=True)
+
+        do_img_now = run_img_btn or run_all_btn
+        do_vid_now = run_vid_btn or run_all_btn
+
+        if do_img_now or do_vid_now:
             from utils.batch import batch_generate_images, batch_generate_videos
 
-            # Прогресс-таблица
+            batch_input = [{"scene_number": p["scene_number"], "prompt": p["prompt"]}
+                           for p in photo_prompts_raw]
+            vid_input   = [{"scene_number": p["scene_number"], "prompt": p["prompt"]}
+                           for p in video_prompts_raw]
+
             st.markdown('<div style="color:#C8FF00;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin:1rem 0 0.5rem">Прогресс</div>', unsafe_allow_html=True)
-            status_placeholders = {}
-            for p in batch_prompts:
+
+            # Строки прогресса по сценам
+            prog_rows = {}
+            for p in photo_prompts_raw:
                 ph = st.empty()
-                ph.markdown(f'<div style="background:#141414;border:1px solid #333;border-radius:8px;padding:0.5rem 1rem;margin:3px 0;font-size:0.82rem;color:#555">⏳ Сцена {p["scene_number"]} — ожидание...</div>', unsafe_allow_html=True)
-                status_placeholders[p["scene_number"]] = ph
+                ph.markdown(f'<div style="background:#141414;border:1px solid #333;border-radius:8px;padding:0.4rem 1rem;margin:2px 0;font-size:0.8rem;color:#444">⏳ Сцена {p["scene_number"]}...</div>', unsafe_allow_html=True)
+                prog_rows[p["scene_number"]] = ph
+
+            def _upd(sn, status, path, kind):
+                icons = {"ok":"✅","error":"❌","timeout":"⏰","pending":"⏳"}
+                colors = {"ok":"#C8FF00","error":"#ff4444","timeout":"#ff8800","pending":"#444"}
+                labels = {"ok":"готово","error":"ошибка","timeout":"таймаут","pending":"..."}
+                ic = icons.get(status,"⏳"); cl = colors.get(status,"#444"); lb = labels.get(status,status)
+                prog_rows[sn].markdown(
+                    f'<div style="background:#141414;border:1px solid {cl}33;border-radius:8px;padding:0.4rem 1rem;margin:2px 0;font-size:0.8rem;color:{cl}">{ic} Сцена {sn} {kind} — {lb}</div>',
+                    unsafe_allow_html=True)
 
             img_results, vid_results = [], []
 
-            # Генерация фото
-            if do_img:
-                st.markdown('<div style="color:#888;font-size:0.78rem;margin:0.5rem 0">🖼️ Генерирую изображения...</div>', unsafe_allow_html=True)
-                def img_cb(scene_num, status, path):
-                    icon = "✅" if status == "ok" else "❌"
-                    color = "#C8FF00" if status == "ok" else "#ff4444"
-                    status_placeholders[scene_num].markdown(
-                        f'<div style="background:#141414;border:1px solid {color}33;border-radius:8px;padding:0.5rem 1rem;margin:3px 0;font-size:0.82rem;color:{color}">{icon} Сцена {scene_num} — фото {"готово" if status == "ok" else "ошибка"}</div>',
-                        unsafe_allow_html=True)
-                img_results = batch_generate_images(batch_prompts, batch_aspect, img_cb)
+            if do_img_now:
+                img_results = batch_generate_images(batch_input, batch_aspect,
+                                                    lambda sn, st_, p: _upd(sn, st_, p, "фото"))
 
-            # Генерация видео
-            if do_vid:
-                st.markdown('<div style="color:#888;font-size:0.78rem;margin:0.5rem 0">🎥 Запускаю Veo (все сцены параллельно)...</div>', unsafe_allow_html=True)
-                def vid_cb(scene_num, status, path):
-                    icon = "✅" if status == "ok" else ("⏰" if status == "timeout" else "❌")
-                    color = "#C8FF00" if status == "ok" else ("#ff8800" if status == "timeout" else "#ff4444")
-                    label = {"ok": "видео готово", "timeout": "таймаут", "error": "ошибка"}.get(status, status)
-                    status_placeholders[scene_num].markdown(
-                        f'<div style="background:#141414;border:1px solid {color}33;border-radius:8px;padding:0.5rem 1rem;margin:3px 0;font-size:0.82rem;color:{color}">{icon} Сцена {scene_num} — {label}</div>',
-                        unsafe_allow_html=True)
-                vid_results = batch_generate_videos(batch_prompts, batch_dur, batch_res, vid_cb)
+            if do_vid_now:
+                vid_results = batch_generate_videos(vid_input, batch_dur, batch_res,
+                                                    lambda sn, st_, p: _upd(sn, st_, p, "видео"))
 
-            # Результаты
-            st.markdown("<br>", unsafe_allow_html=True)
             ok_img = sum(1 for r in img_results if r.get("status") == "ok")
             ok_vid = sum(1 for r in vid_results if r.get("status") == "ok")
-            st.markdown(f'<div style="background:#141414;border:1px solid #C8FF00;border-radius:12px;padding:1rem 1.5rem;font-size:0.9rem;color:#fff">✅ Готово: <b style="color:#C8FF00">{ok_img} фото</b> · <b style="color:#C8FF00">{ok_vid} видео</b></div>', unsafe_allow_html=True)
-
-            # Галерея результатов
-            if img_results:
-                st.markdown('<div class="hg-gallery-title">Сгенерированные фото</div>', unsafe_allow_html=True)
-                gcols = st.columns(3)
-                for i, r in enumerate([x for x in img_results if x.get("image_path") and os.path.exists(x["image_path"])]):
-                    with gcols[i % 3]:
-                        st.image(r["image_path"], use_container_width=True)
-                        st.caption(f"Сцена {r['scene_number']}")
-                        with open(r["image_path"], "rb") as f:
-                            st.download_button("📥", f.read(), os.path.basename(r["image_path"]), key=f"bi{i}")
-
-            if vid_results:
-                st.markdown('<div class="hg-gallery-title">Сгенерированные видео</div>', unsafe_allow_html=True)
-                for r in [x for x in vid_results if x.get("video_path") and os.path.exists(x["video_path"])]:
-                    st.video(r["video_path"])
-                    with open(r["video_path"], "rb") as f:
-                        st.download_button(f"📥 Скачать видео сцена {r['scene_number']}", f.read(),
-                                           os.path.basename(r["video_path"]), key=f"bv{r['scene_number']}")
+            st.markdown(f'<div style="background:#141414;border:1px solid #C8FF00;border-radius:12px;padding:1rem 1.5rem;font-size:0.9rem;color:#fff;margin-top:1rem">✅ Готово: <b style="color:#C8FF00">{ok_img} фото</b> · <b style="color:#C8FF00">{ok_vid} видео</b> — обнови страницу чтобы увидеть в сторибоарде</div>', unsafe_allow_html=True)
 
 # ─── FOOTER ───────────────────────────────────────────────────────────────────
 st.markdown('<br><div style="text-align:center;color:#333;font-size:0.75rem;border-top:1px solid #1a1a1a;padding-top:1rem">AI Content Studio · Groq + Google Imagen 4 + Veo</div>', unsafe_allow_html=True)
