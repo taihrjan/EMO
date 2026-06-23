@@ -1,0 +1,14 @@
+openai>=1.0.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+streamlit>=1.28.0
+pillow>=10.0.0
+google-generativeai>=0.8.0
+groq>=1.0.0
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.100.0
+google-auth-httplib2>=0.2.0
+gtts>=2.4.0
+ffmpeg-python>=0.2.0
+# Для Vertex AI (Google Veo через Vertex):
+# google-cloud-aiplatform>=1.38.0
