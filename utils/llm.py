@@ -71,7 +71,7 @@ def _call_gemini(prompt: str, system_prompt: str = "", json_mode: bool = False) 
     if not api_key:
         raise ValueError("GEMINI_API_KEY не найден в .env")
 
-    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    model_name = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
 
     parts = []

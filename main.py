@@ -48,21 +48,12 @@ def generate_idea(topic: str = None) -> dict:
   "viral_element": "почему вирусное"
 }}"""
 
-    try:
-        raw = call_llm(prompt, system_prompt="Ты гений создания вирусного контента.")
-        idea = parse_json_response(raw)
-        if not idea:
-            idea = {"idea": raw[:100], "hook": topic, "target_audience": "все", "viral_element": "интересно"}
-        print(f"✅ Идея: {idea.get('idea', '')[:60]}...")
-        return idea
-    except Exception as e:
-        print(f"⚠️  Ошибка: {e}, используется demo")
-        return {
-            "idea": f"5 шокирующих фактов о {topic}",
-            "hook": "Вы не поверите, но это правда...",
-            "target_audience": "люди 18-35",
-            "viral_element": "неожиданные факты"
-        }
+    raw = call_llm(prompt, system_prompt="Ты гений создания вирусного контента.")
+    idea = parse_json_response(raw)
+    if not idea:
+        idea = {"idea": raw[:200], "hook": topic, "target_audience": "все", "viral_element": "интересно"}
+    print(f"✅ Идея: {idea.get('idea', '')[:60]}...")
+    return idea
 
 
 def write_script(idea: dict) -> dict:
@@ -90,19 +81,12 @@ def write_script(idea: dict) -> dict:
   "full_script": "полный текст"
 }}"""
 
-    try:
-        raw = call_llm(prompt)
-        script = parse_json_response(raw)
-        if not script or not script.get('full_script'):
-            script = {"full_script": raw, "hook": idea.get('hook', '')}
-        print(f"✅ Сценарий написан ({len(script.get('full_script', ''))} символов)")
-        return script
-    except Exception as e:
-        print(f"⚠️  Demo сценарий")
-        return {
-            "hook": idea.get('hook', ''),
-            "full_script": f"{idea.get('hook', '')} {idea.get('idea', '')} Подпишись чтобы узнать больше!",
-        }
+    raw = call_llm(prompt)
+    script = parse_json_response(raw)
+    if not script or not script.get('full_script'):
+        script = {"full_script": raw, "hook": idea.get('hook', '')}
+    print(f"✅ Сценарий написан ({len(script.get('full_script', ''))} символов)")
+    return script
 
 
 def inspect_script(script: dict) -> dict:
@@ -132,19 +116,14 @@ def inspect_script(script: dict) -> dict:
   "passed": true/false
 }}"""
 
-    try:
-        raw = call_llm(prompt)
-        result = parse_json_response(raw)
-        if result:
-            total = result.get("total", 80)
-            result["passed"] = total >= 80
-            print(f"✅ Оценка: {total}/100 - {'ПРОШЁЛ ✅' if result['passed'] else 'ДОРАБОТАТЬ ⚠️'}")
-            return result
-    except:
-        pass
-
-    print(f"⚠️  Demo оценка")
-    return {"total": 85, "passed": True}
+    raw = call_llm(prompt)
+    result = parse_json_response(raw)
+    if not result:
+        result = {"total": 80, "passed": True}
+    total = result.get("total", 80)
+    result["passed"] = total >= 80
+    print(f"✅ Оценка: {total}/100 - {'ПРОШЁЛ ✅' if result['passed'] else 'ДОРАБОТАТЬ ⚠️'}")
+    return result
 
 
 def create_storyboard(script: dict, num_scenes: int = 5) -> list:
@@ -167,29 +146,15 @@ def create_storyboard(script: dict, num_scenes: int = 5) -> list:
   }}
 ]"""
 
-    try:
-        raw = call_llm(prompt)
-        start = raw.find('[')
-        end = raw.rfind(']') + 1
-        if start >= 0 and end > start:
-            scenes = json.loads(raw[start:end])
-            if scenes:
-                print(f"✅ Сторибоард: {len(scenes)} сцен")
-                return scenes
-    except:
-        pass
-
-    print(f"⚠️  Demo сторибоард")
-    return [
-        {
-            "scene_number": i+1,
-            "duration_seconds": 12,
-            "narration": f"Часть {i+1}",
-            "visual_description": f"Визуальная сцена {i+1}",
-            "mood": "динамичный"
-        }
-        for i in range(num_scenes)
-    ]
+    raw = call_llm(prompt)
+    start = raw.find('[')
+    end = raw.rfind(']') + 1
+    if start >= 0 and end > start:
+        scenes = json.loads(raw[start:end])
+        if scenes:
+            print(f"✅ Сторибоард: {len(scenes)} сцен")
+            return scenes
+    raise RuntimeError(f"Не удалось разобрать сторибоард из ответа LLM: {raw[:200]}")
 
 
 def generate_photo_prompts(scenes: list) -> list:
@@ -262,26 +227,12 @@ def generate_packaging(idea: dict, script: dict) -> dict:
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
 }}"""
 
-    try:
-        raw = call_llm(prompt)
-        packaging = parse_json_response(raw)
-        if packaging:
-            print(f"✅ Паковка: {len(packaging.get('titles', []))} заголовков")
-            return packaging
-    except:
-        pass
-
-    print(f"⚠️  Demo паковка")
-    idea_text = idea.get('idea', 'видео')
-    return {
-        "titles": [
-            f"🔥 {idea_text}",
-            f"Вы не знали: {idea_text}",
-            f"Это изменит всё"
-        ],
-        "thumbnail_texts": ["ШОКИРУЮЩЕЕ", "СМОТРИ ДО КОНЦА"],
-        "hashtags": ["#viral", "#facts", "#shorts", "#trending", "#amazing"]
-    }
+    raw = call_llm(prompt)
+    packaging = parse_json_response(raw)
+    if not packaging:
+        packaging = {"titles": [raw[:100]], "thumbnail_texts": [], "hashtags": []}
+    print(f"✅ Паковка: {len(packaging.get('titles', []))} заголовков")
+    return packaging
 
 
 def run_pipeline(topic: str = "", generate_media: bool = False):
