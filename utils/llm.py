@@ -19,6 +19,7 @@ def call_llm(prompt: str, system_prompt: str = "", provider: Optional[str] = Non
     """
     provider = provider or os.getenv("LLM_PROVIDER", "groq").lower()
 
+    # Пробуем основной провайдер, при ошибке — Gemini как запасной
     try:
         if provider == "groq":
             return _call_groq(prompt, system_prompt, json_mode)
@@ -29,11 +30,13 @@ def call_llm(prompt: str, system_prompt: str = "", provider: Optional[str] = Non
         else:
             raise ValueError(f"Неизвестный провайдер: {provider}")
     except Exception as e:
-        print(f"⚠️  Ошибка LLM ({provider}): {e}")
-        # Возврат demo ответа при ошибке
-        if json_mode:
-            return json.dumps({"status": "error", "message": "LLM недоступен"})
-        return "Demo ответ: LLM недоступен"
+        print(f"⚠️  {provider} ошибка: {e}")
+        # Автоматический fallback на Gemini если не сработал Groq
+        if provider != "gemini" and os.getenv("GEMINI_API_KEY"):
+            print("   🔄 Переключаюсь на Gemini...")
+            return _call_gemini(prompt, system_prompt, json_mode)
+        # Если и Gemini нет — поднимаем ошибку чтобы UI показал её
+        raise RuntimeError(f"LLM недоступен ({provider}): {e}\n\nПроверь API ключи в .env файле:\nGROQ_API_KEY=gsk_...\nGEMINI_API_KEY=AIzaSy...")
 
 
 def _call_groq(prompt: str, system_prompt: str = "", json_mode: bool = False) -> str:

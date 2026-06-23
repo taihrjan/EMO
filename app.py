@@ -254,15 +254,40 @@ st.markdown(f"""
   <div style="flex:1"></div>
   <span style="font-size:0.75rem;color:#555">
     <span class="dot {'dot-g' if groq_ok else 'dot-r'}"></span>Groq&nbsp;&nbsp;
-    <span class="dot {'dot-g' if gem_ok else 'dot-r'}"></span>Imagen
+    <span class="dot {'dot-g' if gem_ok else 'dot-r'}"></span>Gemini/Imagen
   </span>
 </div>
 """, unsafe_allow_html=True)
 
+# Показываем предупреждение если ключи не найдены
+if not groq_ok and not gem_ok:
+    st.error("""
+**API ключи не найдены!**
+
+Создай файл `.env` в папке `C:\\Users\\tahir\\EMO\\` со следующим содержимым:
+
+```
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=твой_ключ_от_aistudio.google.com
+GROQ_API_KEY=твой_ключ_от_console.groq.com
+GROQ_MODEL=llama3-70b-8192
+IMAGEN_MODEL=imagen-4.0-generate-001
+VEO_MODEL=veo-3.0-generate-preview
+VEO_RESOLUTION=720p
+VEO_DURATION_SECONDS=5
+```
+
+Потом **перезапусти** `streamlit run app.py`
+""")
+elif not groq_ok:
+    st.warning("⚠️ GROQ_API_KEY не найден — используется Gemini")
+elif not gem_ok:
+    st.warning("⚠️ GEMINI_API_KEY не найден — изображения и видео недоступны")
+
 # ─── SIDEBAR (settings) ───────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### ⚙️ Настройки")
-    provider = st.selectbox("LLM", ["groq","gemini","openai"])
+    provider = st.selectbox("LLM", ["gemini","groq","openai"])
     os.environ["LLM_PROVIDER"] = provider
 
     gk = st.text_input("Groq API Key", value=os.getenv("GROQ_API_KEY",""), type="password")
