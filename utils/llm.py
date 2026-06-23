@@ -1,26 +1,14 @@
 """Универсальный интерфейс для работы с LLM (Groq, Gemini, OpenAI)."""
 
 import os
+import time
 from typing import Optional
 import json
 
+
 def call_llm(prompt: str, system_prompt: str = "", provider: Optional[str] = None, json_mode: bool = False) -> str:
-    """
-    Универсальный вызов LLM.
-
-    Args:
-        prompt: Основной запрос
-        system_prompt: Системный промпт
-        provider: Провайдер ("groq", "gemini", "openai"). По умолчанию из .env
-        json_mode: Ожидать JSON в ответе
-
-    Returns:
-        Текст ответа от LLM
-    """
     provider = provider or os.getenv("LLM_PROVIDER", "groq").lower()
 
-    # Порядок попыток: основной → запасной
-    order = []
     if provider == "groq":
         order = ["groq", "gemini"]
     elif provider == "gemini":
@@ -30,23 +18,30 @@ def call_llm(prompt: str, system_prompt: str = "", provider: Optional[str] = Non
 
     last_err = None
     for p in order:
-        try:
-            if p == "groq" and os.getenv("GROQ_API_KEY"):
-                print(f"   🤖 Groq...")
-                return _call_groq(prompt, system_prompt, json_mode)
-            elif p == "gemini" and os.getenv("GEMINI_API_KEY"):
-                print(f"   🤖 Gemini...")
-                return _call_gemini(prompt, system_prompt, json_mode)
-        except Exception as e:
-            print(f"   ⚠️  {p} ошибка: {str(e)[:120]}")
-            last_err = e
-            continue
+        for attempt in range(3):
+            try:
+                if p == "groq" and os.getenv("GROQ_API_KEY"):
+                    print(f"   🤖 Groq (попытка {attempt+1})...")
+                    return _call_groq(prompt, system_prompt, json_mode)
+                elif p == "gemini" and os.getenv("GEMINI_API_KEY"):
+                    print(f"   🤖 Gemini (попытка {attempt+1})...")
+                    return _call_gemini(prompt, system_prompt, json_mode)
+                break
+            except Exception as e:
+                last_err = e
+                err_str = str(e)
+                if "429" in err_str:
+                    wait = (attempt + 1) * 15
+                    print(f"   ⏳ {p} лимит запросов, жду {wait}с...")
+                    time.sleep(wait)
+                    continue
+                print(f"   ⚠️  {p} ошибка: {err_str[:120]}")
+                break
 
     raise RuntimeError(f"Все LLM недоступны. Последняя ошибка: {last_err}\n\nПроверь .env:\nGROQ_API_KEY=gsk_...\nGEMINI_API_KEY=AIzaSy...")
 
 
 def _call_groq(prompt: str, system_prompt: str = "", json_mode: bool = False) -> str:
-    """Вызов Groq API через requests."""
     import requests
 
     api_key = os.getenv("GROQ_API_KEY")
@@ -63,14 +58,13 @@ def _call_groq(prompt: str, system_prompt: str = "", json_mode: bool = False) ->
         "https://api.groq.com/openai/v1/chat/completions",
         json={"model": model, "messages": messages, "max_tokens": 4096, "temperature": 0.7},
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        timeout=30,
+        timeout=60,
     )
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"]
 
 
 def _call_gemini(prompt: str, system_prompt: str = "", json_mode: bool = False) -> str:
-    """Вызов Google Gemini API через requests (без SDK)."""
     import requests
 
     api_key = os.getenv("GEMINI_API_KEY")
@@ -86,13 +80,12 @@ def _call_gemini(prompt: str, system_prompt: str = "", json_mode: bool = False) 
     parts.append({"text": prompt})
 
     payload = {"contents": [{"parts": parts}]}
-    resp = requests.post(url, json=payload, params={"key": api_key}, timeout=30)
+    resp = requests.post(url, json=payload, params={"key": api_key}, timeout=60)
     resp.raise_for_status()
     return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def _call_openai(prompt: str, system_prompt: str = "", json_mode: bool = False) -> str:
-    """Вызов OpenAI API."""
     try:
         from openai import OpenAI
     except ImportError:
@@ -121,7 +114,6 @@ def _call_openai(prompt: str, system_prompt: str = "", json_mode: bool = False) 
 
 
 def parse_json_response(response: str) -> dict:
-    """Парсить JSON из ответа LLM."""
     try:
         start = response.find('{')
         end = response.rfind('}') + 1
