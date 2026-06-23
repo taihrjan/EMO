@@ -280,7 +280,7 @@ with st.sidebar:
     os.environ["IMAGEN_MODEL"] = img_model
 
 # ─── TABS ─────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3 = st.tabs(["🚀  Генератор", "🖼️  Изображения", "📋  История"])
+tab1, tab2, tab3, tab4 = st.tabs(["🚀  Генератор", "🖼️  Изображения", "📋  История", "💬  Чат"])
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 1 — GENERATOR
@@ -560,6 +560,103 @@ with tab3:
         st.download_button("📥 Скачать JSON", json.dumps(h, ensure_ascii=False, indent=2), sel, "application/json", use_container_width=True)
     else:
         st.markdown('<div style="border:2px dashed #1a1a1a;border-radius:14px;padding:4rem;text-align:center;color:#333">История пуста — запусти генерацию</div>', unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 4 — CHAT
+# ══════════════════════════════════════════════════════════════════════════════
+with tab4:
+    st.markdown('<div style="font-size:1.8rem;font-weight:900;color:#fff;margin-bottom:0.3rem">Чат с AI</div>', unsafe_allow_html=True)
+    st.markdown('<div style="color:#555;font-size:0.9rem;margin-bottom:1.5rem">Groq · llama3-70b · Помощник по контенту</div>', unsafe_allow_html=True)
+
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = [
+            {"role": "assistant", "content": "Привет! Я AI-ассистент для создания контента. Могу помочь с идеями для видео, написать сценарий, придумать хэштеги или ответить на любой вопрос. Что создаём?"}
+        ]
+
+    # Отображение истории чата
+    for msg in st.session_state.chat_messages:
+        is_user = msg["role"] == "user"
+        bg = "#1a1a1a" if is_user else "#141414"
+        border = "#333" if is_user else "#C8FF00"
+        align = "flex-end" if is_user else "flex-start"
+        label = "Ты" if is_user else "AI"
+        label_color = "#888" if is_user else "#C8FF00"
+        st.markdown(f"""
+<div style="display:flex;justify-content:{align};margin:0.4rem 0">
+  <div style="max-width:75%;background:{bg};border:1px solid {border};border-radius:12px;padding:0.75rem 1rem">
+    <div style="font-size:0.65rem;color:{label_color};font-weight:700;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.08em">{label}</div>
+    <div style="color:#e0e0e0;font-size:0.9rem;line-height:1.6;white-space:pre-wrap">{msg["content"]}</div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+    # Быстрые промты
+    st.markdown("<br>", unsafe_allow_html=True)
+    quick_col = st.columns(4)
+    quick_prompts = [
+        "💡 Придумай идею для вирусного видео",
+        "✍️ Напиши хук для Reels",
+        "📦 Придумай 5 хэштегов",
+        "🎬 Структура сценария 60 сек",
+    ]
+    for i, qp in enumerate(quick_prompts):
+        with quick_col[i]:
+            if st.button(qp, use_container_width=True, key=f"qp{i}"):
+                st.session_state["chat_input_prefill"] = qp.split(" ", 1)[1]
+                st.rerun()
+
+    # Поле ввода
+    prefill = st.session_state.pop("chat_input_prefill", "")
+    chat_cols = st.columns([8, 1])
+    with chat_cols[0]:
+        user_input = st.text_input("", value=prefill, placeholder="Напиши сообщение...", label_visibility="collapsed", key="chat_input")
+    with chat_cols[1]:
+        send_btn = st.button("➤", type="primary", use_container_width=True)
+
+    if (send_btn or (user_input and st.session_state.get("_last_chat") != user_input)) and user_input.strip():
+        st.session_state["_last_chat"] = user_input
+        st.session_state.chat_messages.append({"role": "user", "content": user_input})
+
+        # Запрос к Groq
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            reply = "⚠️ GROQ_API_KEY не найден. Добавь ключ в настройках (боковая панель)."
+        else:
+            try:
+                import requests as req
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                }
+                messages_payload = [
+                    {"role": "system", "content": "Ты профессиональный AI-ассистент для создания вирусного контента для TikTok, YouTube Shorts и Instagram Reels. Отвечай на русском, кратко и по делу. Помогаешь с идеями, сценариями, промтами для изображений, хэштегами."}
+                ] + [{"role": m["role"], "content": m["content"]} for m in st.session_state.chat_messages]
+
+                payload = {
+                    "model": os.getenv("GROQ_MODEL", "llama3-70b-8192"),
+                    "messages": messages_payload,
+                    "max_tokens": 1024,
+                    "temperature": 0.8,
+                }
+                with st.spinner("AI думает..."):
+                    resp = req.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        json=payload, headers=headers, timeout=30
+                    )
+                if resp.status_code == 200:
+                    reply = resp.json()["choices"][0]["message"]["content"]
+                else:
+                    reply = f"⚠️ Ошибка Groq {resp.status_code}: {resp.text[:200]}"
+            except Exception as e:
+                reply = f"⚠️ Ошибка: {e}"
+
+        st.session_state.chat_messages.append({"role": "assistant", "content": reply})
+        st.rerun()
+
+    # Кнопка очистки чата
+    if len(st.session_state.chat_messages) > 1:
+        if st.button("🗑 Очистить чат", key="clear_chat"):
+            st.session_state.chat_messages = [st.session_state.chat_messages[0]]
+            st.rerun()
 
 # ─── FOOTER ───────────────────────────────────────────────────────────────────
 st.markdown('<br><div style="text-align:center;color:#333;font-size:0.75rem;border-top:1px solid #1a1a1a;padding-top:1rem">AI Content Studio · Groq + Google Imagen 4 + Veo</div>', unsafe_allow_html=True)
