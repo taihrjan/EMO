@@ -24,6 +24,31 @@ OUTPUT_DIR = "generated_output"
 os.makedirs(f"{OUTPUT_DIR}/images", exist_ok=True)
 os.makedirs(f"{OUTPUT_DIR}/videos", exist_ok=True)
 
+BRAIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brain")
+
+
+def load_brain_system_prompt() -> str:
+    """Загружает базу знаний из brain/ и формирует системный промт."""
+    texts = []
+    if os.path.isdir(BRAIN_DIR):
+        for fname in sorted(os.listdir(BRAIN_DIR)):
+            if fname.endswith(".txt") and fname != "README.txt":
+                path = os.path.join(BRAIN_DIR, fname)
+                try:
+                    with open(path, encoding="utf-8") as f:
+                        texts.append(f"=== {fname} ===\n{f.read()}")
+                except:
+                    pass
+    if texts:
+        brain_text = "\n\n".join(texts)[:8000]
+        return f"""Ты AI-агент для создания контента. Действуй СТРОГО по системе из базы знаний ниже.
+Не придумывай — следуй методологии, структурам и правилам из документов.
+
+БАЗА ЗНАНИЙ:
+{brain_text}
+"""
+    return "Ты профессиональный создатель вирусного контента для TikTok, YouTube Shorts, Instagram Reels."
+
 
 def generate_idea(topic: str = None) -> dict:
     """STAGE 1: Генерация вирусной идеи для видео"""
@@ -48,7 +73,7 @@ def generate_idea(topic: str = None) -> dict:
   "viral_element": "почему вирусное"
 }}"""
 
-    raw = call_llm(prompt, system_prompt="Ты гений создания вирусного контента.")
+    raw = call_llm(prompt, system_prompt=load_brain_system_prompt())
     idea = parse_json_response(raw)
     if not idea:
         idea = {"idea": raw[:200], "hook": topic, "target_audience": "все", "viral_element": "интересно"}
@@ -81,7 +106,7 @@ def write_script(idea: dict) -> dict:
   "full_script": "полный текст"
 }}"""
 
-    raw = call_llm(prompt)
+    raw = call_llm(prompt, system_prompt=load_brain_system_prompt())
     script = parse_json_response(raw)
     if not script or not script.get('full_script'):
         script = {"full_script": raw, "hook": idea.get('hook', '')}
@@ -116,7 +141,7 @@ def inspect_script(script: dict) -> dict:
   "passed": true/false
 }}"""
 
-    raw = call_llm(prompt)
+    raw = call_llm(prompt, system_prompt=load_brain_system_prompt())
     result = parse_json_response(raw)
     if not result:
         result = {"total": 80, "passed": True}
@@ -146,7 +171,7 @@ def create_storyboard(script: dict, num_scenes: int = 5) -> list:
   }}
 ]"""
 
-    raw = call_llm(prompt)
+    raw = call_llm(prompt, system_prompt=load_brain_system_prompt())
     start = raw.find('[')
     end = raw.rfind(']') + 1
     if start >= 0 and end > start:
@@ -227,7 +252,7 @@ def generate_packaging(idea: dict, script: dict) -> dict:
   "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
 }}"""
 
-    raw = call_llm(prompt)
+    raw = call_llm(prompt, system_prompt=load_brain_system_prompt())
     packaging = parse_json_response(raw)
     if not packaging:
         packaging = {"titles": [raw[:100]], "thumbnail_texts": [], "hashtags": []}
