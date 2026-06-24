@@ -242,6 +242,16 @@ p { color: #ccc; }
 code { background: #1e1e1e !important; color: #C8FF00 !important; border-radius: 6px !important; }
 [data-testid="stCodeBlock"] { background: #141414 !important; border: 1px solid #2a2a2a !important; border-radius: 10px !important; }
 [data-testid="stCodeBlock"] code { color: #e0e0e0 !important; }
+/* Большое окно чата */
+section[data-testid="stMain"] .stChatMessageContainer {
+    max-height: 520px !important;
+    overflow-y: auto !important;
+}
+/* Поле ввода чата снизу */
+.stChatInputContainer {
+    border-top: 1px solid #1a1a1a !important;
+    padding-top: 0.5rem !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -665,45 +675,42 @@ with tab4:
   </div>
 </div>""", unsafe_allow_html=True)
 
-    # ── БЫСТРЫЕ ПРОМТЫ ───────────────────────────────────────────
-    st.markdown("<br>", unsafe_allow_html=True)
-    quick_col = st.columns(4)
-    quick_prompts = [
-        "💡 Придумай идею для вирусного видео",
-        "✍️ Напиши хук для Reels",
-        "📦 Придумай 5 хэштегов",
-        "🎬 Структура сценария 60 сек",
-    ]
-    for i, qp in enumerate(quick_prompts):
-        with quick_col[i]:
-            if st.button(qp, use_container_width=True, key=f"qp{i}"):
-                st.session_state["chat_input_prefill"] = qp.split(" ", 1)[1]
+    # ── ЗАГРУЗКА ФОТО РЕФЕРЕНСА ──────────────────────────────────
+    ref_col1, ref_col2 = st.columns([5, 1])
+    with ref_col1:
+        chat_ref = st.file_uploader("📎 Фото референс", type=["jpg","jpeg","png","webp"], key="chat_ref", label_visibility="collapsed")
+    with ref_col2:
+        if len(st.session_state.chat_messages) > 1:
+            if st.button("🗑 Очистить", key="clear_chat", use_container_width=True):
+                st.session_state.chat_messages = [st.session_state.chat_messages[0]]
                 st.rerun()
 
-    # ── ПОЛЕ ВВОДА ───────────────────────────────────────────────
-    prefill = st.session_state.pop("chat_input_prefill", "")
+    if chat_ref:
+        st.image(Image.open(chat_ref), width=180)
+
+    # ── ПОЛЕ ВВОДА (Enter отправляет) ────────────────────────────
     user_input = st.chat_input("Напиши сообщение... (Enter для отправки)", key="chat_input")
-    if prefill and not user_input:
-        user_input = prefill
 
     if user_input and user_input.strip():
-        st.session_state["_last_chat"] = user_input
-        st.session_state.chat_messages.append({"role": "user", "content": user_input})
+        has_ref = chat_ref is not None
+        msg_data = {"role": "user", "content": user_input}
+        if has_ref:
+            msg_data["has_image"] = True
+        st.session_state.chat_messages.append(msg_data)
 
         chat_prov = st.session_state.get("chat_prov", "groq")
-
-        # Строим системный промт из базы знаний
         brain_content = load_brain()
+        ref_note = "\n\nПользователь прислал фото-референс — учти его при ответе." if has_ref else ""
+
         if brain_content:
-            sys_prompt = f"""Ты AI-агент. Отвечай ТОЛЬКО на основе базы знаний ниже. Не выходи за её рамки. Отвечай на русском языке, кратко и по делу.
+            sys_prompt = f"""Ты AI-агент. Действуй СТРОГО по системе из базы знаний. Отвечай на русском языке.
 
 БАЗА ЗНАНИЙ:
 {brain_content[:6000]}
 
-Если вопрос не касается базы знаний — скажи: "Этой информации нет в базе знаний."
-"""
+Если вопрос не касается базы знаний — скажи: "Этой информации нет в базе знаний."{ref_note}"""
         else:
-            sys_prompt = "Ты профессиональный AI-ассистент для создания вирусного контента для TikTok, YouTube Shorts и Instagram Reels. Отвечай на русском языке, кратко и по делу."
+            sys_prompt = f"Ты профессиональный AI-ассистент для создания вирусного контента для TikTok, YouTube Shorts и Instagram Reels. Отвечай на русском языке.{ref_note}"
 
         try:
             with st.spinner("AI думает..."):
@@ -718,11 +725,6 @@ with tab4:
 
         st.session_state.chat_messages.append({"role": "assistant", "content": reply})
         st.rerun()
-
-    if len(st.session_state.chat_messages) > 1:
-        if st.button("🗑 Очистить чат", key="clear_chat"):
-            st.session_state.chat_messages = [st.session_state.chat_messages[0]]
-            st.rerun()
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 5 — BATCH GENERATION
