@@ -682,13 +682,11 @@ with tab4:
 
     # ── ПОЛЕ ВВОДА ───────────────────────────────────────────────
     prefill = st.session_state.pop("chat_input_prefill", "")
-    chat_cols = st.columns([8, 1])
-    with chat_cols[0]:
-        user_input = st.text_input("", value=prefill, placeholder="Напиши сообщение...", label_visibility="collapsed", key="chat_input")
-    with chat_cols[1]:
-        send_btn = st.button("➤", type="primary", use_container_width=True)
+    user_input = st.chat_input("Напиши сообщение... (Enter для отправки)", key="chat_input")
+    if prefill and not user_input:
+        user_input = prefill
 
-    if (send_btn or (user_input and st.session_state.get("_last_chat") != user_input)) and user_input.strip():
+    if user_input and user_input.strip():
         st.session_state["_last_chat"] = user_input
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
 
