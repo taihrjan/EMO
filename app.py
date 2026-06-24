@@ -177,23 +177,30 @@ div[data-testid="stButton"] > button[kind="primary"]:hover {
     color: #e5e5e5 !important;
 }
 
-/* ── FILE UPLOADER — button only, no drag zone ── */
+/* ── FILE UPLOADER — drag & drop zone ── */
 [data-testid="stFileUploader"] {
     background: transparent !important;
     border: none !important;
     padding: 0 !important;
 }
 [data-testid="stFileUploaderDropzone"] {
-    background: #141414 !important;
-    border: 1px solid #2a2a2a !important;
+    background: #0f0f0f !important;
+    border: 1px dashed #333 !important;
     border-radius: 10px !important;
-    padding: 0.5rem !important;
+    padding: 0.8rem !important;
     min-height: unset !important;
+    transition: border-color 0.2s;
 }
-/* hide drag-drop instructional text, keep only button */
-[data-testid="stFileUploaderDropzone"] > div > span,
+[data-testid="stFileUploaderDropzone"]:hover {
+    border-color: #C8FF00 !important;
+}
+[data-testid="stFileUploaderDropzone"] > div > span {
+    color: #555 !important;
+    font-size: 0.78rem !important;
+}
 [data-testid="stFileUploaderDropzone"] > div > small {
-    display: none !important;
+    color: #333 !important;
+    font-size: 0.7rem !important;
 }
 [data-testid="stFileUploaderDropzone"] > div > button {
     width: 100% !important;
@@ -308,11 +315,23 @@ with st.sidebar:
     # ── ПАПКА: МОЗГИ ──
     with st.expander("🧠 Знания агента", expanded=True):
         brain_files = [f for f in sorted(os.listdir(BRAIN_DIR)) if f.endswith(".txt")]
-        up = st.file_uploader("+ Добавить .txt", type=["txt"], key="sb_brain_up", label_visibility="collapsed")
+        up = st.file_uploader("Перетащи или выбери файл (.txt, .pdf)", type=["txt","pdf"], key="sb_brain_up", label_visibility="collapsed")
         if up:
-            with open(os.path.join(BRAIN_DIR, up.name), "wb") as f:
-                f.write(up.read())
-            st.success(f"✅ {up.name}")
+            if up.name.lower().endswith(".pdf"):
+                try:
+                    import PyPDF2, io
+                    reader = PyPDF2.PdfReader(io.BytesIO(up.read()))
+                    text = "\n\n".join(p.extract_text() or "" for p in reader.pages)
+                    save_name = up.name.replace(".pdf", ".txt")
+                    with open(os.path.join(BRAIN_DIR, save_name), "w", encoding="utf-8") as f:
+                        f.write(f"[Источник: {up.name}]\n\n{text}")
+                    st.success(f"✅ PDF → {save_name} ({len(reader.pages)} стр.)")
+                except Exception as e:
+                    st.error(f"Ошибка PDF: {e}")
+            else:
+                with open(os.path.join(BRAIN_DIR, up.name), "wb") as f:
+                    f.write(up.read())
+                st.success(f"✅ {up.name}")
             st.rerun()
         for bf in brain_files:
             bcols = st.columns([5, 1])
