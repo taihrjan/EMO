@@ -14,7 +14,7 @@ st.set_page_config(
     page_title="AI Content Studio",
     page_icon="🎬",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 st.markdown("""
@@ -254,6 +254,115 @@ section[data-testid="stMain"] .stChatMessageContainer {
 }
 </style>
 """, unsafe_allow_html=True)
+
+# ─── DIRS ─────────────────────────────────────────────────────────────────────
+BRAIN_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brain")
+IMAGES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_output", "images")
+VIDEOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_output", "videos")
+for _d in [BRAIN_DIR, IMAGES_DIR, VIDEOS_DIR]:
+    os.makedirs(_d, exist_ok=True)
+
+MEMORY_FILE = os.path.join(BRAIN_DIR, "agent_memory.txt")
+ERRORS_FILE = os.path.join(BRAIN_DIR, "agent_errors.txt")
+
+
+def load_brain() -> str:
+    texts = []
+    for fname in sorted(os.listdir(BRAIN_DIR)):
+        if fname.endswith(".txt") and fname not in ("README.txt",):
+            try:
+                with open(os.path.join(BRAIN_DIR, fname), encoding="utf-8") as f:
+                    texts.append(f"=== {fname} ===\n{f.read()}")
+            except:
+                pass
+    return "\n\n".join(texts)
+
+
+def agent_remember(insight: str):
+    """Агент записывает новое знание в память."""
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+    with open(MEMORY_FILE, "a", encoding="utf-8") as f:
+        f.write(f"\n[{ts}] {insight}\n")
+
+
+def agent_log_error(error: str):
+    """Агент записывает ошибку чтобы не повторять."""
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+    with open(ERRORS_FILE, "a", encoding="utf-8") as f:
+        f.write(f"\n[{ts}] ОШИБКА: {error}\n")
+
+
+# ─── SIDEBAR ──────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown('<div style="font-size:1.2rem;font-weight:900;color:#fff;padding:0.5rem 0 1rem;border-bottom:1px solid #222;margin-bottom:1rem">🎬 AI Studio</div>', unsafe_allow_html=True)
+
+    # ── API статус ──
+    groq_ok = bool(os.getenv("GROQ_API_KEY"))
+    gem_ok  = bool(os.getenv("GEMINI_API_KEY"))
+    st.markdown(f"""
+<div style="font-size:0.7rem;color:#555;margin-bottom:1rem">
+  <span style="color:{'#C8FF00' if groq_ok else '#ff4444'}">●</span> Groq &nbsp;
+  <span style="color:{'#C8FF00' if gem_ok else '#ff4444'}">●</span> Gemini
+</div>""", unsafe_allow_html=True)
+
+    # ── ПАПКА: МОЗГИ ──
+    with st.expander("🧠 Знания агента", expanded=True):
+        brain_files = [f for f in sorted(os.listdir(BRAIN_DIR)) if f.endswith(".txt")]
+        up = st.file_uploader("+ Добавить .txt", type=["txt"], key="sb_brain_up", label_visibility="collapsed")
+        if up:
+            with open(os.path.join(BRAIN_DIR, up.name), "wb") as f:
+                f.write(up.read())
+            st.success(f"✅ {up.name}")
+            st.rerun()
+        for bf in brain_files:
+            bcols = st.columns([5, 1])
+            icon = "📋" if bf.startswith("agent_") else "📄"
+            bcols[0].markdown(f'<div style="font-size:0.78rem;color:#aaa">{icon} {bf}</div>', unsafe_allow_html=True)
+            with open(os.path.join(BRAIN_DIR, bf), "rb") as f:
+                bcols[1].download_button("↓", f.read(), bf, key=f"dl_b_{bf}", use_container_width=True)
+
+    # ── ПАПКА: ИЗОБРАЖЕНИЯ ──
+    with st.expander("🖼️ Изображения", expanded=False):
+        img_files = sorted([f for f in os.listdir(IMAGES_DIR) if f.lower().endswith((".png",".jpg",".jpeg"))], reverse=True)
+        if img_files:
+            for imf in img_files[:20]:
+                ic1, ic2 = st.columns([5, 1])
+                ic1.markdown(f'<div style="font-size:0.78rem;color:#aaa">🖼 {imf}</div>', unsafe_allow_html=True)
+                with open(os.path.join(IMAGES_DIR, imf), "rb") as f:
+                    ic2.download_button("↓", f.read(), imf, key=f"dl_i_{imf}", use_container_width=True)
+        else:
+            st.markdown('<div style="font-size:0.75rem;color:#444">Нет изображений</div>', unsafe_allow_html=True)
+
+    # ── ПАПКА: ВИДЕО ──
+    with st.expander("🎥 Видео", expanded=False):
+        vid_files = sorted([f for f in os.listdir(VIDEOS_DIR) if f.lower().endswith(".mp4")], reverse=True)
+        if vid_files:
+            for vf in vid_files[:10]:
+                vc1, vc2 = st.columns([5, 1])
+                vc1.markdown(f'<div style="font-size:0.78rem;color:#aaa">🎬 {vf}</div>', unsafe_allow_html=True)
+                with open(os.path.join(VIDEOS_DIR, vf), "rb") as f:
+                    vc2.download_button("↓", f.read(), vf, key=f"dl_v_{vf}", use_container_width=True)
+        else:
+            st.markdown('<div style="font-size:0.75rem;color:#444">Нет видео</div>', unsafe_allow_html=True)
+
+    # ── ЗАГРУЗКА ФОТО/ВИДЕО В ПАПКИ ──
+    with st.expander("📤 Загрузить файлы", expanded=False):
+        up_img = st.file_uploader("Фото в images/", type=["jpg","jpeg","png"], key="sb_up_img", label_visibility="collapsed")
+        if up_img:
+            with open(os.path.join(IMAGES_DIR, up_img.name), "wb") as f:
+                f.write(up_img.read())
+            st.success(f"✅ {up_img.name} → images/")
+            st.rerun()
+        up_vid = st.file_uploader("Видео в videos/", type=["mp4","mov"], key="sb_up_vid", label_visibility="collapsed")
+        if up_vid:
+            with open(os.path.join(VIDEOS_DIR, up_vid.name), "wb") as f:
+                f.write(up_vid.read())
+            st.success(f"✅ {up_vid.name} → videos/")
+            st.rerun()
+
+    st.divider()
+    st.markdown('<div style="font-size:0.7rem;color:#333;text-align:center">AI Studio v2</div>', unsafe_allow_html=True)
+
 
 # ─── NAV ──────────────────────────────────────────────────────────────────────
 groq_ok = bool(os.getenv("GROQ_API_KEY"))
@@ -601,63 +710,21 @@ with tab3:
 # TAB 4 — CHAT
 # ══════════════════════════════════════════════════════════════════════════════
 with tab4:
-    BRAIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brain")
-    os.makedirs(BRAIN_DIR, exist_ok=True)
-
-    def load_brain() -> str:
-        """Загружает все .txt файлы из папки brain/ в единый контекст."""
-        texts = []
-        for fname in sorted(os.listdir(BRAIN_DIR)):
-            if fname.endswith(".txt") and fname != "README.txt":
-                path = os.path.join(BRAIN_DIR, fname)
-                try:
-                    with open(path, encoding="utf-8") as f:
-                        texts.append(f"=== {fname} ===\n{f.read()}")
-                except:
-                    pass
-        return "\n\n".join(texts)
-
     # Заголовок + провайдер
     chat_prov_cols = st.columns([3,1])
     with chat_prov_cols[0]:
         st.markdown('<div style="font-size:1.8rem;font-weight:900;color:#fff;margin-bottom:0.3rem">🧠 Чат с AI</div>', unsafe_allow_html=True)
     with chat_prov_cols[1]:
         chat_provider = st.selectbox("", ["groq","gemini"], label_visibility="collapsed", key="chat_prov")
-    model_label = "Llama 3.1-8b Instant" if chat_provider == "groq" else "Gemini 2.0 Flash"
-    st.markdown(f'<div style="color:#555;font-size:0.9rem;margin-bottom:1rem">{model_label} · Мыслит только на основе базы знаний</div>', unsafe_allow_html=True)
-
-    # ── ЗАГРУЗКА ФАЙЛОВ В МОЗГИ ──────────────────────────────────
-    with st.expander("🧠 База знаний агента (папка brain/)", expanded=False):
-        brain_files = [f for f in os.listdir(BRAIN_DIR) if f.endswith(".txt") and f != "README.txt"]
-
-        uploaded_brain = st.file_uploader(
-            "Загрузи .txt файл в базу знаний",
-            type=["txt"],
-            key="brain_upload",
-            label_visibility="collapsed"
-        )
-        if uploaded_brain:
-            save_path = os.path.join(BRAIN_DIR, uploaded_brain.name)
-            with open(save_path, "wb") as f:
-                f.write(uploaded_brain.read())
-            st.success(f"✅ Загружено: {uploaded_brain.name}")
-            st.rerun()
-
-        if brain_files:
-            st.markdown(f"**Файлов в базе: {len(brain_files)}**")
-            for bf in brain_files:
-                bcols = st.columns([6,1])
-                bcols[0].markdown(f"📄 `{bf}`")
-                if bcols[1].button("🗑", key=f"del_brain_{bf}"):
-                    os.remove(os.path.join(BRAIN_DIR, bf))
-                    st.rerun()
-        else:
-            st.info("База пуста — агент работает как универсальный ассистент. Загрузи .txt чтобы он думал только твоим материалом.")
+    brain_files_count = len([f for f in os.listdir(BRAIN_DIR) if f.endswith(".txt")])
+    model_label = "Llama 3.1-8b" if chat_provider == "groq" else "Gemini 2.0 Flash"
+    status_txt = f"📚 {brain_files_count} файлов в базе знаний" if brain_files_count else "База знаний пуста — загрузи .txt в сайдбаре"
+    st.markdown(f'<div style="color:#555;font-size:0.85rem;margin-bottom:1rem">{model_label} · {status_txt}</div>', unsafe_allow_html=True)
 
     # ── ИСТОРИЯ ЧАТА ─────────────────────────────────────────────
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
-            {"role": "assistant", "content": "Привет! Загрузи .txt файлы в базу знаний — и я буду думать только на основе твоего материала. Или просто пиши — помогу с контентом."}
+            {"role": "assistant", "content": "Привет! Загрузи .txt файлы в 🧠 Знания агента (слева) — и я буду действовать строго по твоей системе. Пиши — помогу с контентом."}
         ]
 
     for msg in st.session_state.chat_messages:
@@ -667,50 +734,50 @@ with tab4:
         align = "flex-end" if is_user else "flex-start"
         label = "Ты" if is_user else "AI"
         label_color = "#888" if is_user else "#C8FF00"
+        img_note = '<div style="font-size:0.72rem;color:#C8FF00;margin-bottom:0.3rem">📎 + фото референс</div>' if msg.get("has_image") else ""
         st.markdown(f"""
-<div style="display:flex;justify-content:{align};margin:0.4rem 0">
-  <div style="max-width:80%;background:{bg};border:1px solid {border};border-radius:12px;padding:0.75rem 1rem">
+<div style="display:flex;justify-content:{align};margin:0.5rem 0">
+  <div style="max-width:82%;background:{bg};border:1px solid {border};border-radius:14px;padding:0.85rem 1.1rem">
     <div style="font-size:0.65rem;color:{label_color};font-weight:700;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.08em">{label}</div>
-    <div style="color:#e0e0e0;font-size:0.9rem;line-height:1.6;white-space:pre-wrap">{msg["content"]}</div>
+    {img_note}
+    <div style="color:#e0e0e0;font-size:0.92rem;line-height:1.7;white-space:pre-wrap">{msg["content"]}</div>
   </div>
 </div>""", unsafe_allow_html=True)
 
-    # ── ЗАГРУЗКА ФОТО РЕФЕРЕНСА ──────────────────────────────────
+    # ── ФОТО РЕФЕРЕНС + ОЧИСТИТЬ ─────────────────────────────────
     ref_col1, ref_col2 = st.columns([5, 1])
     with ref_col1:
         chat_ref = st.file_uploader("📎 Фото референс", type=["jpg","jpeg","png","webp"], key="chat_ref", label_visibility="collapsed")
     with ref_col2:
         if len(st.session_state.chat_messages) > 1:
-            if st.button("🗑 Очистить", key="clear_chat", use_container_width=True):
+            if st.button("🗑", key="clear_chat", use_container_width=True, help="Очистить чат"):
                 st.session_state.chat_messages = [st.session_state.chat_messages[0]]
                 st.rerun()
-
     if chat_ref:
-        st.image(Image.open(chat_ref), width=180)
+        st.image(Image.open(chat_ref), width=160)
 
-    # ── ПОЛЕ ВВОДА (Enter отправляет) ────────────────────────────
-    user_input = st.chat_input("Напиши сообщение... (Enter для отправки)", key="chat_input")
+    # ── ПОЛЕ ВВОДА ───────────────────────────────────────────────
+    user_input = st.chat_input("Напиши сообщение... (Enter отправляет)", key="chat_input")
 
     if user_input and user_input.strip():
         has_ref = chat_ref is not None
-        msg_data = {"role": "user", "content": user_input}
-        if has_ref:
-            msg_data["has_image"] = True
-        st.session_state.chat_messages.append(msg_data)
+        st.session_state.chat_messages.append({"role": "user", "content": user_input, "has_image": has_ref})
 
         chat_prov = st.session_state.get("chat_prov", "groq")
         brain_content = load_brain()
-        ref_note = "\n\nПользователь прислал фото-референс — учти его при ответе." if has_ref else ""
+        ref_note = "\n\nПользователь прислал фото-референс — учти его при создании контента." if has_ref else ""
 
         if brain_content:
-            sys_prompt = f"""Ты AI-агент. Действуй СТРОГО по системе из базы знаний. Отвечай на русском языке.
+            sys_prompt = f"""Ты AI-агент для создания контента. Действуй СТРОГО по системе из базы знаний ниже.
+После каждого ответа мысленно запоминай ключевые инсайты.
+Отвечай на русском языке.
 
 БАЗА ЗНАНИЙ:
-{brain_content[:6000]}
+{brain_content[:7000]}
 
 Если вопрос не касается базы знаний — скажи: "Этой информации нет в базе знаний."{ref_note}"""
         else:
-            sys_prompt = f"Ты профессиональный AI-ассистент для создания вирусного контента для TikTok, YouTube Shorts и Instagram Reels. Отвечай на русском языке.{ref_note}"
+            sys_prompt = f"Ты профессиональный AI-ассистент по созданию вирусного контента для TikTok, YouTube Shorts и Instagram Reels. Отвечай на русском языке.{ref_note}"
 
         try:
             with st.spinner("AI думает..."):
@@ -720,8 +787,19 @@ with tab4:
                     history_text += f"{role}: {m['content']}\n"
                 full_prompt = (history_text + f"Пользователь: {user_input}") if history_text else user_input
                 reply = call_llm(full_prompt, system_prompt=sys_prompt, provider=chat_prov)
+
+            # Агент записывает ключевые знания из диалога
+            if len(st.session_state.chat_messages) % 5 == 0:
+                try:
+                    insight_prompt = f"Извлеки 1-2 ключевых инсайта из этого диалога (одна строка):\nВопрос: {user_input}\nОтвет: {reply[:300]}"
+                    insight = call_llm(insight_prompt, system_prompt="Ты архивариус. Кратко запиши суть.", provider=chat_prov)
+                    agent_remember(insight.strip()[:200])
+                except:
+                    pass
+
         except Exception as e:
             reply = f"⚠️ Ошибка: {e}"
+            agent_log_error(f"{user_input[:80]} → {str(e)[:120]}")
 
         st.session_state.chat_messages.append({"role": "assistant", "content": reply})
         st.rerun()
