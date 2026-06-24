@@ -596,7 +596,7 @@ with tab4:
         st.markdown('<div style="font-size:1.8rem;font-weight:900;color:#fff;margin-bottom:0.3rem">Чат с AI</div>', unsafe_allow_html=True)
     with chat_prov_cols[1]:
         chat_provider = st.selectbox("", ["gemini","groq"], label_visibility="collapsed", key="chat_prov")
-    model_label = "Gemini 1.5 Flash" if chat_provider == "gemini" else "Llama3-70b"
+    model_label = "Gemini 2.0 Flash" if chat_provider == "gemini" else "Llama 3.3-70b"
     st.markdown(f'<div style="color:#555;font-size:0.9rem;margin-bottom:1.5rem">{model_label} · Помощник по контенту</div>', unsafe_allow_html=True)
 
     if "chat_messages" not in st.session_state:
@@ -647,50 +647,19 @@ with tab4:
         st.session_state["_last_chat"] = user_input
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
 
-        # Запрос к AI
-        import requests as req
-        chat_prov = st.session_state.get("chat_prov", "gemini")
+        # Запрос к AI через call_llm с автофallback и retry
+        chat_prov = st.session_state.get("chat_prov", "groq")
         sys_prompt = "Ты профессиональный AI-ассистент для создания вирусного контента для TikTok, YouTube Shorts и Instagram Reels. Отвечай на русском языке, кратко и по делу. Помогаешь с идеями, сценариями, промтами для изображений, хэштегами."
 
         try:
             with st.spinner("AI думает..."):
-                if chat_prov == "gemini":
-                    api_key = os.getenv("GEMINI_API_KEY")
-                    if not api_key:
-                        raise ValueError("GEMINI_API_KEY не найден")
-                    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
-                    # Собираем историю в формат Gemini
-                    contents = []
-                    for m in st.session_state.chat_messages:
-                        role = "user" if m["role"] == "user" else "model"
-                        contents.append({"role": role, "parts": [{"text": m["content"]}]})
-                    payload = {
-                        "system_instruction": {"parts": [{"text": sys_prompt}]},
-                        "contents": contents,
-                        "generationConfig": {"maxOutputTokens": 1024, "temperature": 0.8}
-                    }
-                    resp = req.post(url, json=payload, params={"key": api_key}, timeout=30)
-                    if resp.status_code == 200:
-                        reply = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-                    else:
-                        raise ValueError(f"Gemini {resp.status_code}: {resp.text[:200]}")
-                else:
-                    api_key = os.getenv("GROQ_API_KEY")
-                    if not api_key:
-                        raise ValueError("GROQ_API_KEY не найден")
-                    messages_payload = [{"role": "system", "content": sys_prompt}] + \
-                        [{"role": m["role"], "content": m["content"]} for m in st.session_state.chat_messages]
-                    resp = req.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
-                        json={"model": os.getenv("GROQ_MODEL","llama3-70b-8192"), "messages": messages_payload, "max_tokens": 1024, "temperature": 0.8},
-                        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                        timeout=30
-                    )
-                    if resp.status_code == 200:
-                        reply = resp.json()["choices"][0]["message"]["content"]
-                    else:
-                        raise ValueError(f"Groq {resp.status_code}: {resp.text[:200]}")
+                # Строим контекст из истории чата
+                history_text = ""
+                for m in st.session_state.chat_messages[:-1]:
+                    role = "Пользователь" if m["role"] == "user" else "AI"
+                    history_text += f"{role}: {m['content']}\n"
+                full_prompt = (history_text + f"Пользователь: {user_input}") if history_text else user_input
+                reply = call_llm(full_prompt, system_prompt=sys_prompt, provider=chat_prov)
         except Exception as e:
             reply = f"⚠️ Ошибка: {e}"
 
