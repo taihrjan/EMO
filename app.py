@@ -591,21 +591,65 @@ with tab3:
 # TAB 4 — CHAT
 # ══════════════════════════════════════════════════════════════════════════════
 with tab4:
-    # Выбор провайдера чата
+    BRAIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brain")
+    os.makedirs(BRAIN_DIR, exist_ok=True)
+
+    def load_brain() -> str:
+        """Загружает все .txt файлы из папки brain/ в единый контекст."""
+        texts = []
+        for fname in sorted(os.listdir(BRAIN_DIR)):
+            if fname.endswith(".txt") and fname != "README.txt":
+                path = os.path.join(BRAIN_DIR, fname)
+                try:
+                    with open(path, encoding="utf-8") as f:
+                        texts.append(f"=== {fname} ===\n{f.read()}")
+                except:
+                    pass
+        return "\n\n".join(texts)
+
+    # Заголовок + провайдер
     chat_prov_cols = st.columns([3,1])
     with chat_prov_cols[0]:
-        st.markdown('<div style="font-size:1.8rem;font-weight:900;color:#fff;margin-bottom:0.3rem">Чат с AI</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:1.8rem;font-weight:900;color:#fff;margin-bottom:0.3rem">🧠 Чат с AI</div>', unsafe_allow_html=True)
     with chat_prov_cols[1]:
-        chat_provider = st.selectbox("", ["gemini","groq"], label_visibility="collapsed", key="chat_prov")
-    model_label = "Gemini 2.0 Flash" if chat_provider == "gemini" else "Llama 3.3-70b"
-    st.markdown(f'<div style="color:#555;font-size:0.9rem;margin-bottom:1.5rem">{model_label} · Помощник по контенту</div>', unsafe_allow_html=True)
+        chat_provider = st.selectbox("", ["groq","gemini"], label_visibility="collapsed", key="chat_prov")
+    model_label = "Llama 3.1-8b Instant" if chat_provider == "groq" else "Gemini 2.0 Flash"
+    st.markdown(f'<div style="color:#555;font-size:0.9rem;margin-bottom:1rem">{model_label} · Мыслит только на основе базы знаний</div>', unsafe_allow_html=True)
 
+    # ── ЗАГРУЗКА ФАЙЛОВ В МОЗГИ ──────────────────────────────────
+    with st.expander("🧠 База знаний агента (папка brain/)", expanded=False):
+        brain_files = [f for f in os.listdir(BRAIN_DIR) if f.endswith(".txt") and f != "README.txt"]
+
+        uploaded_brain = st.file_uploader(
+            "Загрузи .txt файл в базу знаний",
+            type=["txt"],
+            key="brain_upload",
+            label_visibility="collapsed"
+        )
+        if uploaded_brain:
+            save_path = os.path.join(BRAIN_DIR, uploaded_brain.name)
+            with open(save_path, "wb") as f:
+                f.write(uploaded_brain.read())
+            st.success(f"✅ Загружено: {uploaded_brain.name}")
+            st.rerun()
+
+        if brain_files:
+            st.markdown(f"**Файлов в базе: {len(brain_files)}**")
+            for bf in brain_files:
+                bcols = st.columns([6,1])
+                bcols[0].markdown(f"📄 `{bf}`")
+                if bcols[1].button("🗑", key=f"del_brain_{bf}"):
+                    os.remove(os.path.join(BRAIN_DIR, bf))
+                    st.rerun()
+        else:
+            st.info("База пуста — агент работает как универсальный ассистент. Загрузи .txt чтобы он думал только твоим материалом.")
+
+    # ── ИСТОРИЯ ЧАТА ─────────────────────────────────────────────
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = [
-            {"role": "assistant", "content": "Привет! Я AI-ассистент для создания контента. Могу помочь с идеями для видео, написать сценарий, придумать хэштеги или ответить на любой вопрос. Что создаём?"}
+            {"role": "assistant", "content": "Привет! Загрузи .txt файлы в базу знаний — и я буду думать только на основе твоего материала. Или просто пиши — помогу с контентом."}
         ]
 
-    # Отображение истории чата
     for msg in st.session_state.chat_messages:
         is_user = msg["role"] == "user"
         bg = "#1a1a1a" if is_user else "#141414"
@@ -615,13 +659,13 @@ with tab4:
         label_color = "#888" if is_user else "#C8FF00"
         st.markdown(f"""
 <div style="display:flex;justify-content:{align};margin:0.4rem 0">
-  <div style="max-width:75%;background:{bg};border:1px solid {border};border-radius:12px;padding:0.75rem 1rem">
+  <div style="max-width:80%;background:{bg};border:1px solid {border};border-radius:12px;padding:0.75rem 1rem">
     <div style="font-size:0.65rem;color:{label_color};font-weight:700;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.08em">{label}</div>
     <div style="color:#e0e0e0;font-size:0.9rem;line-height:1.6;white-space:pre-wrap">{msg["content"]}</div>
   </div>
 </div>""", unsafe_allow_html=True)
 
-    # Быстрые промты
+    # ── БЫСТРЫЕ ПРОМТЫ ───────────────────────────────────────────
     st.markdown("<br>", unsafe_allow_html=True)
     quick_col = st.columns(4)
     quick_prompts = [
@@ -636,7 +680,7 @@ with tab4:
                 st.session_state["chat_input_prefill"] = qp.split(" ", 1)[1]
                 st.rerun()
 
-    # Поле ввода
+    # ── ПОЛЕ ВВОДА ───────────────────────────────────────────────
     prefill = st.session_state.pop("chat_input_prefill", "")
     chat_cols = st.columns([8, 1])
     with chat_cols[0]:
@@ -648,13 +692,23 @@ with tab4:
         st.session_state["_last_chat"] = user_input
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
 
-        # Запрос к AI через call_llm с автофallback и retry
         chat_prov = st.session_state.get("chat_prov", "groq")
-        sys_prompt = "Ты профессиональный AI-ассистент для создания вирусного контента для TikTok, YouTube Shorts и Instagram Reels. Отвечай на русском языке, кратко и по делу. Помогаешь с идеями, сценариями, промтами для изображений, хэштегами."
+
+        # Строим системный промт из базы знаний
+        brain_content = load_brain()
+        if brain_content:
+            sys_prompt = f"""Ты AI-агент. Отвечай ТОЛЬКО на основе базы знаний ниже. Не выходи за её рамки. Отвечай на русском языке, кратко и по делу.
+
+БАЗА ЗНАНИЙ:
+{brain_content[:6000]}
+
+Если вопрос не касается базы знаний — скажи: "Этой информации нет в базе знаний."
+"""
+        else:
+            sys_prompt = "Ты профессиональный AI-ассистент для создания вирусного контента для TikTok, YouTube Shorts и Instagram Reels. Отвечай на русском языке, кратко и по делу."
 
         try:
             with st.spinner("AI думает..."):
-                # Строим контекст из истории чата
                 history_text = ""
                 for m in st.session_state.chat_messages[:-1]:
                     role = "Пользователь" if m["role"] == "user" else "AI"
@@ -667,7 +721,6 @@ with tab4:
         st.session_state.chat_messages.append({"role": "assistant", "content": reply})
         st.rerun()
 
-    # Кнопка очистки чата
     if len(st.session_state.chat_messages) > 1:
         if st.button("🗑 Очистить чат", key="clear_chat"):
             st.session_state.chat_messages = [st.session_state.chat_messages[0]]
