@@ -263,9 +263,10 @@ section[data-testid="stMain"] .stChatMessageContainer {
 """, unsafe_allow_html=True)
 
 # ─── DIRS ─────────────────────────────────────────────────────────────────────
-BRAIN_DIR  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brain")
-IMAGES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_output", "images")
-VIDEOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "generated_output", "videos")
+_BASE = os.path.dirname(os.path.abspath(__file__))
+BRAIN_DIR  = os.path.join(_BASE, "brain")
+IMAGES_DIR = os.path.join(_BASE, "generated_output", "images")
+VIDEOS_DIR = os.path.join(_BASE, "generated_output", "videos")
 for _d in [BRAIN_DIR, IMAGES_DIR, VIDEOS_DIR]:
     os.makedirs(_d, exist_ok=True)
 
@@ -380,7 +381,7 @@ with st.sidebar:
             st.rerun()
 
     st.divider()
-    st.markdown('<div style="font-size:0.7rem;color:#333;text-align:center">AI Studio v2</div>', unsafe_allow_html=True)
+    st.markdown(f'<div style="font-size:0.62rem;color:#2a2a2a;word-break:break-all">{_BASE}</div>', unsafe_allow_html=True)
 
 
 # ─── NAV ──────────────────────────────────────────────────────────────────────
